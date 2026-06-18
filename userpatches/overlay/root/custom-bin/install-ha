@@ -1,0 +1,97 @@
+#!/bin/bash
+set -e
+set -x
+
+PKG_DIR="/root/ha-packages"
+
+if [ -e /root/.haos_ok ]; then
+  echo "Home Assistant már telepítve van."
+  exit 0
+fi
+
+echo "   connEct" > /tmp/screen
+echo "Waiting for internet connection..."
+
+while ! ping -c 1 -W 1 8.8.8.8 > /dev/null 2>&1; do
+  sleep 1
+done
+
+echo nameserver 8.8.8.8 > /etc/resolv.conf
+echo homeassistant > /etc/hostname
+hostname homeassistant
+
+sed -i 's#PRETTY_NAME=.*#PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"#' /etc/os-release
+
+grep -q "systemd.unified_cgroup_hierarchy=0" /boot/armbianEnv.txt || \
+  echo "extraargs=systemd.unified_cgroup_hierarchy=0 apparmor=1 security=apparmor" >> /boot/armbianEnv.txt
+
+echo "   apt" > /tmp/screen
+apt update
+
+apt install -y \
+  apparmor \
+  cifs-utils \
+  curl \
+  dbus \
+  jq \
+  libglib2.0-bin \
+  lsb-release \
+  network-manager \
+  nfs-common \
+  systemd-journal-remote \
+  systemd-resolved \
+  systemd-timesyncd \
+  udisks2 \
+  wget \
+  bluez
+
+systemctl restart systemd-resolved.service || true
+systemctl restart NetworkManager || true
+
+echo "   docHEr" > /tmp/screen
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL get.docker.com | sh
+fi
+
+echo "   agEnt" > /tmp/screen
+if [ -f "$PKG_DIR/os-agent.deb" ]; then
+  dpkg -i "$PKG_DIR/os-agent.deb"
+else
+  wget -O /tmp/os-agent.deb https://github.com/home-assistant/os-agent/releases/download/1.7.2/os-agent_1.7.2_linux_aarch64.deb
+  dpkg -i /tmp/os-agent.deb
+fi
+
+echo "   apparmor" > /tmp/screen
+apt remove -y apparmor || true
+
+if [ -f "$PKG_DIR/apparmor_2.13.6-10_arm64.deb" ]; then
+  apt install -y "$PKG_DIR/apparmor_2.13.6-10_arm64.deb"
+else
+  wget -O /tmp/apparmor_2.13.6-10_arm64.deb http://ftp.debian.org/debian/pool/main/a/apparmor/apparmor_2.13.6-10_arm64.deb
+  apt install -y /tmp/apparmor_2.13.6-10_arm64.deb
+fi
+
+echo "   HA" > /tmp/screen
+if [ -f "$PKG_DIR/homeassistant-supervised.deb" ]; then
+  HA_DEB="$PKG_DIR/homeassistant-supervised.deb"
+else
+  wget -O /tmp/homeassistant-supervised.deb https://github.com/home-assistant/supervised-installer/releases/download/3.0.0/homeassistant-supervised.deb
+  HA_DEB="/tmp/homeassistant-supervised.deb"
+fi
+
+echo "homeassistant-supervised ha/machine-type select qemuarm-64" | debconf-set-selections
+DEBIAN_FRONTEND=noninteractive dpkg -i "$HA_DEB"
+
+if ls /etc/netplan/*.yaml >/dev/null 2>&1; then
+  sed -i 's#renderer: .*#renderer: NetworkManager#' /etc/netplan/*.yaml
+fi
+
+mkdir -p /var/lib/homeassistant/apparmor
+curl -sL https://version.home-assistant.io/apparmor_stable.txt > /var/lib/homeassistant/apparmor/hassio-supervisor || true
+
+touch /root/.haos_ok
+
+echo "   reboot" > /tmp/screen
+sync
+sleep 3
+reboot

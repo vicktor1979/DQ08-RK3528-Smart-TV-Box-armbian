@@ -1,0 +1,48 @@
+#!/bin/bash
+
+CONFIG="/etc/openvfd.conf"
+
+echo "1) LCD kikapcsolás"
+echo "2) LCD 10%"
+echo "3) LCD 50%"
+echo "4) LCD 100%"
+echo
+read -rp "Választás [1-4]: " CHOICE
+
+case "$CHOICE" in
+  1)
+    echo -n "" > /dev/openvfd
+    echo "✓ LCD kikapcsolva"
+    exit 0
+    ;;
+  2)
+    BRIGHTNESS="0"
+    TEXT="LCD 10%"
+    ;;
+  3)
+    BRIGHTNESS="3"
+    TEXT="LCD 50%"
+    ;;
+  4)
+    BRIGHTNESS="7"
+    TEXT="LCD 100%"
+    ;;
+  *)
+    echo "Érvénytelen választás"
+    exit 1
+    ;;
+esac
+
+# Mindig a bevált display típust használjuk
+sed -i "s/^vfd_display_type=.*/vfd_display_type='0,0,0,3'/" "$CONFIG"
+
+# Fényerő frissítése
+if grep -q "^vfd_brightness=" "$CONFIG"; then
+    sed -i "s/^vfd_brightness=.*/vfd_brightness='$BRIGHTNESS'/" "$CONFIG"
+else
+    echo "vfd_brightness='$BRIGHTNESS'" >> "$CONFIG"
+fi
+
+systemctl restart openvfd
+
+echo "✓ Beállítva: $TEXT"

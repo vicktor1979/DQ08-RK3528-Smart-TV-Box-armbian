@@ -1,0 +1,9 @@
+cache/
+output/
+tmp/
+*.img
+*.img.xz
+*.deb
+*.log
+*.tmp
+*.swp

@@ -82,6 +82,8 @@ EOF
           sed -i \
             's#^fdtfile=.*#fdtfile=rockchip/rk3528-vontar-dq08-8733bs-openvfd.dtb#' \
             /boot/armbianEnv.txt
+          sed -i '/^extraargs=/d' /boot/armbianEnv.txt
+          echo 'extraargs=video=TV-1:d video=HDMI-A-1:e' >> /boot/armbianEnv.txt
         else
           echo "fdtfile=rockchip/rk3528-vontar-dq08-8733bs-openvfd.dtb" \
             >> /boot/armbianEnv.txt
